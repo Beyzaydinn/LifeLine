@@ -1,0 +1,10 @@
+firmware/build/
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/dependencies.lock
+firmware/managed_components/
+pc/.venv/
+pc/__pycache__/
+pc/models/*.onnx
+*.pyc
+.DS_Store

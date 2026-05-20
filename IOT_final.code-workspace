@@ -1,0 +1,28 @@
+{
+    "folders": [
+        {
+            "name": "firmware",
+            "path": "firmware"
+        },
+        {
+            "name": "pc",
+            "path": "pc"
+        },
+        {
+            "name": "wokwi",
+            "path": "wokwi"
+        }
+    ],
+    "settings": {
+        "idf.currentSetup": "C:\\esp\\v5.5.3\\esp-idf",
+        "idf.portWin": "COM8",
+        "idf.openOcdConfigs": [
+            "board/esp32s3-builtin.cfg"
+        ],
+        "idf.cmakeSourceDirectory": "${workspaceFolder:firmware}",
+        "idf.buildPath": "${workspaceFolder:firmware}/build",
+        "idf.customExtraVars": {
+            "IDF_TARGET": "esp32s3"
+        }
+    }
+}

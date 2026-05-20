@@ -1,0 +1,5 @@
+pyserial>=3.5
+pycryptodomex>=3.20
+faster-whisper>=1.0.0
+requests>=2.31.0
+piper-tts>=1.2.0

@@ -1,0 +1,12 @@
+{
+    "idf.currentSetup": "C:\\esp\\v5.5.3\\esp-idf",
+    "idf.portWin": "COM8",
+    "idf.openOcdConfigs": [
+        "board/esp32s3-builtin.cfg"
+    ],
+    "idf.customExtraVars": {
+        "IDF_TARGET": "esp32s3"
+    },
+    "idf.buildPath": "${workspaceFolder}/build",
+    "idf.flashType": "UART"
+}

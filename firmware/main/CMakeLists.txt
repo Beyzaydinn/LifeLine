@@ -1,0 +1,23 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "state_machine.c"
+        "audio_input.c"
+        "audio_output.c"
+        "sensor.c"
+        "led_strip_ctrl.c"
+        "usb_cdc.c"
+        "protocol.c"
+        "crypto_aes.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        esp_driver_i2s
+        esp_driver_i2c
+        esp_driver_gpio
+        esp_timer
+        nvs_flash
+        mbedtls
+        led_strip
+        esp_tinyusb
+)
