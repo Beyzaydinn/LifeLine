@@ -32,6 +32,16 @@ static protocol_parser_t s_parser;
 static bool s_crypto_announced;
 static bool s_status_sent;
 
+/* PLAYBACK_END robust sinyali: queue uzerinden gondersek kuyruk doluyken
+ * drop oluyor (xQueueSend 0 timeout). Flag ile gonderince UART RX
+ * task'inde her durumda guvenli set edilir, task_playback kuyruk drain
+ * olduktan sonra okur. */
+static volatile bool s_playback_end_requested;
+
+/* DIAG: AUDIO_DOWN queue overflow sayaci. Calismayan bir test sonrasi
+ * loglara bakinca kac chunk drop olduguni gormek icin. */
+static uint32_t s_audio_dropped;
+
 static esp_err_t queue_frame(uint8_t type, const uint8_t *payload, size_t payload_len, bool encrypt)
 {
     uint8_t work[PROTO_MAX_PAYLOAD + 64];
@@ -151,12 +161,21 @@ static void on_frame_received(uint8_t type, const uint8_t *payload, size_t len, 
         }
         memcpy(chunk.buf, plain, plain_len);
         chunk.len = plain_len;
-        xQueueSend(s_playback_queue, &chunk, 0);
+        if (xQueueSend(s_playback_queue, &chunk, 0) != pdTRUE) {
+            s_audio_dropped++;
+            /* Her 50 chunk drop'unda bir warn bas: spam'sizdir, gercek
+             * bir flow control sorununu ortaya cikarir. */
+            if ((s_audio_dropped % 50) == 1) {
+                ESP_LOGW(TAG, "AUDIO_DOWN dropped (total=%lu)",
+                         (unsigned long)s_audio_dropped);
+            }
+        }
         break;
     }
     case MSG_PLAYBACK_END: {
-        frame_item_t end = {0};
-        xQueueSend(s_playback_queue, &end, 0);
+        /* Flag-based: queue dolu olsa bile guvenle set edilir.
+         * task_playback queue drain edip flag'i kontrol edecek. */
+        s_playback_end_requested = true;
         break;
     }
     case MSG_RESET:
@@ -229,16 +248,28 @@ static void task_playback(void *arg)
     (void)arg;
     frame_item_t item;
     while (1) {
-        if (xQueueReceive(s_playback_queue, &item, portMAX_DELAY) == pdTRUE) {
-            if (item.len == 0) {
-                audio_out_stop();
-                fsm_set_state(STATE_IDLE);
-                led_strip_set_pattern(STATE_IDLE);
-                send_status(STATE_IDLE, 0);
-                continue;
-            }
+        /* Queue'dan al; 100 ms icinde gelmezse flag'i kontrol et.
+         * Bu, PLAYBACK_END flag'inin queue empty kalsa bile gorulmesini
+         * saglar. portMAX_DELAY kullanilsaydi, queue boslandiktan sonra
+         * task burada sonsuza dek beklerdi ve PLAYBACK_END asla
+         * islenmezdi. */
+        if (xQueueReceive(s_playback_queue, &item, pdMS_TO_TICKS(100)) == pdTRUE) {
             size_t samples = item.len / sizeof(int16_t);
             audio_out_write((const int16_t *)item.buf, samples);
+        } else if (s_playback_end_requested && fsm_get_state() == STATE_SPEAKING) {
+            /* Queue empty (timeout), PLAYBACK_END istendi: hoparlor susturup
+             * IDLE'a don. DMA'da hala buffered ses olabilir; audio_out_stop
+             * i2s_channel_disable cagiriyor, kalanlar druschd olur. */
+            s_playback_end_requested = false;
+            audio_out_stop();
+            fsm_set_state(STATE_IDLE);
+            led_strip_set_pattern(STATE_IDLE);
+            send_status(STATE_IDLE, 0);
+            if (s_audio_dropped > 0) {
+                ESP_LOGW(TAG, "Playback finished; %lu AUDIO_DOWN chunks dropped during session",
+                         (unsigned long)s_audio_dropped);
+                s_audio_dropped = 0;
+            }
         }
     }
 }

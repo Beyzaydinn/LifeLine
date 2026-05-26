@@ -52,6 +52,13 @@ class SerialBridge:
         # DIAG: her gelen frame'i tipe gore say. stop_recording'de ozet bas.
         # Bu fix degil olcu aleti; bug bulunduktan sonra kaldirilabilir.
         self._frame_counts: Counter = Counter()
+        # Audio playback pacing: ESP playback queue 8 deep ve I2S 62.5 chunk/sn
+        # drain ediyor (16 ms/chunk). UART burst hizinda (~171 chunk/sn)
+        # gondersek queue overflow + drop olur, PLAYBACK_END dahil. Burada
+        # gercek-zamanli besleme yapip queue'yu yakin-bos tutariz.
+        self._audio_ref_t: float = 0.0
+        self._audio_idx: int = 0
+        self._audio_last_t: float = 0.0
 
     def set_status_callback(self, cb: Callable[[int, int], None]) -> None:
         self._status_cb = cb
@@ -207,6 +214,19 @@ class SerialBridge:
     def send_audio_down(self, pcm: bytes) -> None:
         from protocol import MSG_AUDIO_DOWN
 
+        # Real-time pacing: 256 sample @ 16 kHz = 16 ms/chunk. Yeni oturum
+        # tespiti: son chunk'tan beri >1 sn gecmisse referansi sifirla.
+        now = time.perf_counter()
+        if self._audio_idx == 0 or (now - self._audio_last_t) > 1.0:
+            self._audio_ref_t = now
+            self._audio_idx = 0
+        chunk_s = len(pcm) / 2 / 16000  # tipik 0.016
+        target_t = self._audio_ref_t + self._audio_idx * chunk_s
+        delay = target_t - now
+        if delay > 0:
+            time.sleep(delay)
+        self._audio_idx += 1
+        self._audio_last_t = time.perf_counter()
         self.send_frame(MSG_AUDIO_DOWN, pcm, encrypt=True)
 
     def send_playback_end(self) -> None:

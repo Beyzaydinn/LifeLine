@@ -8,3 +8,7 @@ pc/__pycache__/
 pc/models/*.onnx
 *.pyc
 .DS_Store
+
+# Test artifactlari (regenerable): _test_tts_calm.py uretiyor.
+pc/tts_calm_test.wav
+

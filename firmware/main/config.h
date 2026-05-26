@@ -18,8 +18,10 @@
 /* ── Audio ───────────────────────────────────────────────────────── */
 /* Hem mikrofon hem hoparlor 16 kHz. 22050 Hz denendi ama MAX98357A /
  * ESP32 I2S driver bu non-yuvarlak rate'i temiz turetemedi, ses
- * tamamen kayboldu. Pipeline hizini ayarlamak icin Piper'i PC
- * tarafinda yavaslatiyoruz (tts.py: length_scale). */
+ * tamamen kayboldu. Konusma tempo ve duraksamalari ESP'de degil,
+ * PC tarafinda ayarlanir: pc/tts.py icindeki LENGTH_SCALE ve
+ * SENTENCE_SILENCE_S sabitleri Piper SynthesisConfig'e gecirilir,
+ * cumleler arasina manuel sifir-byte sessizlik enjekte edilir. */
 #define AUDIO_SAMPLE_RATE_HZ    16000
 #define AUDIO_CHUNK_BYTES       512
 #define AUDIO_CHUNK_SAMPLES     (AUDIO_CHUNK_BYTES / 2)

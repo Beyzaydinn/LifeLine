@@ -12,6 +12,14 @@ log = logging.getLogger(__name__)
 CHUNK_BYTES = 512
 SAMPLE_RATE = 16000
 
+# Konusma tempo ayarlari -- ayrintili tasarim:
+# docs/superpowers/specs/2026-05-26-tts-calm-pace-design.md
+# Default Piper (length_scale=1.0) ilk-yardim asistani icin fazla hizli
+# duyuluyordu; bu iki sabit yavaslatmayi ve cumleler arasi nefesi kontrol
+# eder. Iki dugme bagimsiz: birini buyutmek otekini etkilemez.
+LENGTH_SCALE = 1.25         # Piper SynthesisConfig: >1.0 -> daha yavas, pitch korunur
+SENTENCE_SILENCE_S = 0.45   # Cumleler arasi sessizlik (Piper 1.2+ kendi parametresini kaldirdi)
+
 
 def _piper_paths() -> tuple[Path, Path]:
     base = Path(__file__).parent / "models"
@@ -26,6 +34,11 @@ def synthesize_stream(text: str) -> Generator[bytes, None, None]:
     Piper'in amy-medium model'i native 22050 Hz uretiyor. ESP32 I2S TX
     ise 16000 Hz'le surulduktugu icin once 22050 -> 16000 resample yapip
     sonra chunk'lara boluyoruz. Yoksa ses kesik kesik ve hizli duyuluyor.
+
+    Tempo: SynthesisConfig(length_scale=LENGTH_SCALE) ile Piper yavaslatilir.
+    Cumleler arasi nefes: Piper "cumle basina bir chunk" garanti ediyor;
+    ardisik chunk'lar arasina SENTENCE_SILENCE_S kadar sifir-byte ekleriz
+    (resampler bu sessizligi de 22050 -> 16000'e gecirir, sure korunur).
     """
     onnx, cfg = _piper_paths()
     if not onnx.exists():
@@ -33,16 +46,23 @@ def synthesize_stream(text: str) -> Generator[bytes, None, None]:
         yield from _fallback_beep(text)
         return
 
-    from piper import PiperVoice
+    from piper import PiperVoice, SynthesisConfig
     import numpy as np
 
     voice = PiperVoice.load(str(onnx), config_path=str(cfg))
+    syn_cfg = SynthesisConfig(length_scale=LENGTH_SCALE)
     raw_parts: List[bytes] = []
     piper_sr: int | None = None
 
-    for chunk in voice.synthesize(text):
+    for i, chunk in enumerate(voice.synthesize(text, syn_config=syn_cfg)):
         if piper_sr is None:
             piper_sr = getattr(chunk, "sample_rate", None)
+        # Cumleler arasi sessizlik: ilk chunk haric her chunk'tan once
+        # SENTENCE_SILENCE_S sn'lik sifir byte ekle. Piper'in native sample
+        # rate'inde uretilir; resample sonrasi gercek calma suresi korunur.
+        if i > 0 and piper_sr is not None:
+            silence_samples = int(SENTENCE_SILENCE_S * piper_sr)
+            raw_parts.append(b"\x00" * (silence_samples * 2))  # int16 -> 2 byte
         if hasattr(chunk, "audio_int16_bytes"):
             raw_parts.append(chunk.audio_int16_bytes)
         elif isinstance(chunk, (bytes, bytearray)):
