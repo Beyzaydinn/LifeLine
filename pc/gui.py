@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import logging
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 
@@ -110,6 +111,14 @@ class FirstAidApp(tk.Tk):
         if not port:
             messagebox.showerror("Error", "Select a COM port")
             return
+        # Eski baglanti varsa kapat (cift Connect basildiginda port catismasini onler)
+        if self.bridge is not None:
+            try:
+                self.bridge.close()
+            except Exception:
+                pass
+            self.bridge = None
+            time.sleep(0.3)
         try:
             self.bridge = SerialBridge(port=port)
             self.bridge.set_status_callback(self._on_status)
@@ -166,7 +175,14 @@ class FirstAidApp(tk.Tk):
                 self.bridge.send_playback_end()
                 self.after(0, lambda: self._log("Done.\n"))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+                # Python 3'te `except as e` blogu cikinca 'e' otomatik silinir,
+                # lambda gecikmeli calistiginda NameError veriyor. Hatayi
+                # hemen string'e cevirip closure'a aliyoruz.
+                err_msg = f"{type(e).__name__}: {e}"
+                import traceback
+                traceback.print_exc()  # PowerShell'e tam stack yazsin
+                self.after(0, lambda msg=err_msg: messagebox.showerror("Error", msg))
+                self.after(0, lambda msg=err_msg: self._log(f"ERROR: {msg}"))
             finally:
                 self._busy = False
                 self.after(0, lambda: self.btn_start.config(state=tk.NORMAL))

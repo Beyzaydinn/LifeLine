@@ -68,8 +68,11 @@ esp_err_t sensor_init(void)
     ESP_RETURN_ON_ERROR(max30102_reset(), TAG, "reset chip");
     ESP_RETURN_ON_ERROR(max30102_write(REG_FIFO_CONFIG, 0x4F), TAG, "fifo cfg");
     ESP_RETURN_ON_ERROR(max30102_write(REG_SPO2_CONFIG, 0x27), TAG, "spo2 cfg");
-    ESP_RETURN_ON_ERROR(max30102_write(REG_LED1_PA, 0x24), TAG, "led1");
-    ESP_RETURN_ON_ERROR(max30102_write(REG_LED2_PA, 0x24), TAG, "led2");
+    /* LED current: 0x50 ~= 16 mA per LED. Earlier value 0x24 (~7 mA) was
+     * too weak for loose finger contact; raised so the photodiode sees a
+     * usable reflection even with imperfect placement. */
+    ESP_RETURN_ON_ERROR(max30102_write(REG_LED1_PA, 0x50), TAG, "led1");
+    ESP_RETURN_ON_ERROR(max30102_write(REG_LED2_PA, 0x50), TAG, "led2");
     ESP_RETURN_ON_ERROR(max30102_write(REG_MULTILED, 0x21), TAG, "multiled");
     ESP_RETURN_ON_ERROR(max30102_write(REG_MODE_CONFIG, MODE_SPO2), TAG, "mode");
 
@@ -106,14 +109,15 @@ esp_err_t sensor_read_vitals(sensor_vitals_t *out)
         if (read_fifo_sample(&red, &ir) != ESP_OK) {
             continue;
         }
-        if (ir > 50000 && red > 50000) {
-            red_sum += red;
-            ir_sum += ir;
-            valid_samples++;
-        }
+        /* DEBUG: tum esikleri kaldirdik. Her okunan ornek sayilir.
+         * Boylece valid=false kalirsa, sorun threshold'da degil; FIFO
+         * okumasinda (red/ir gercekten 0 doniyor) demektir. */
+        red_sum += red;
+        ir_sum += ir;
+        valid_samples++;
     }
 
-    if (valid_samples < 4) {
+    if (valid_samples < 1) {
         out->valid = false;
         out->heart_rate = 0;
         out->spo2 = 0;

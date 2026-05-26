@@ -26,7 +26,14 @@ esp_err_t audio_out_init(void)
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
     ESP_RETURN_ON_ERROR(i2s_new_channel(&chan_cfg, &s_tx_chan, NULL), TAG, "new channel");
 
+    /* MAX98357A 16 kHz × 16-bit × MONO = 256 kHz BCLK ile kararsiz
+     * calisabiliyor (cok dusuk BCLK). slot_bit_width'i 32-bit yapinca
+     * BCLK 512 kHz olur, MAX98357A guvenli aralikta calisir. data 16-bit
+     * kaldigi icin audio_out_write'i degistirmemize gerek yok -- driver
+     * 16-bit sample'i 32-bit slot'a MSB-aligned yerlestiriyor. */
     i2s_std_config_t std_cfg = {
+        /* 16 kHz: yuvarlak sayi, ESP32 PLL temiz turetir. Pipeline hizini
+         * ayarlamak icin Piper'i PC tarafinda yavaslatiyoruz. */
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(AUDIO_SAMPLE_RATE_HZ),
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
         .gpio_cfg = {
@@ -42,6 +49,7 @@ esp_err_t audio_out_init(void)
             },
         },
     };
+    std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
 
     ESP_RETURN_ON_ERROR(i2s_channel_init_std_mode(s_tx_chan, &std_cfg), TAG, "init std");
     s_running = false;

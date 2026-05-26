@@ -6,7 +6,7 @@ idf_component_register(
         "audio_output.c"
         "sensor.c"
         "led_strip_ctrl.c"
-        "usb_cdc.c"
+        "uart_link.c"
         "protocol.c"
         "crypto_aes.c"
     INCLUDE_DIRS "."
@@ -15,9 +15,9 @@ idf_component_register(
         esp_driver_i2s
         esp_driver_i2c
         esp_driver_gpio
+        esp_driver_uart
         esp_timer
         nvs_flash
         mbedtls
         led_strip
-        esp_tinyusb
 )

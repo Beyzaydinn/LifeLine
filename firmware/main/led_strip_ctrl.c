@@ -9,7 +9,9 @@
 static const char *TAG = "led";
 
 static led_strip_handle_t s_strip;
-static system_state_t s_anim_state = STATE_IDLE;
+/* volatile: birden fazla task okur/yazar (main vs task_led), derleyici
+ * O3 ile bu degiskeni register'da cacheleyip stale veri okumamalı. */
+static volatile system_state_t s_anim_state = STATE_IDLE;
 static uint32_t s_tick;
 
 static void set_pixel_rgb(uint32_t index, uint8_t r, uint8_t g, uint8_t b)
@@ -66,11 +68,13 @@ void led_strip_task_tick(void)
         break;
     }
     case STATE_RECORDING: {
-        int pos = (s_tick / 4) % LED_STRIP_COUNT;
+        /* Eski tasarim "tek donen LED" idi ama gozle yakalanmasi zor oluyordu.
+         * Yeni tasarim: 8 LED hep kirmizi, hafif nefes (parlaklik dalgalanmasi).
+         * IDLE yesil nefesin kirmizi karsiligi — yanlis anlasilamaz. */
+        float phase = (s_tick % 30) / 30.0f;
+        uint8_t intensity = (uint8_t)(180 + 75 * (0.5f + 0.5f * sinf(phase * 6.28318f)));
         for (int i = 0; i < LED_STRIP_COUNT; i++) {
-            if (i == pos) {
-                set_pixel_rgb(i, 255, 0, 0);
-            }
+            set_pixel_rgb(i, intensity, 0, 0);
         }
         break;
     }

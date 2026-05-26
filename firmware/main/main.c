@@ -12,7 +12,7 @@
 #include "state_machine.h"
 #include "protocol.h"
 #include "crypto_aes.h"
-#include "usb_cdc.h"
+#include "uart_link.h"
 #include "audio_input.h"
 #include "audio_output.h"
 #include "sensor.h"
@@ -134,7 +134,13 @@ static void on_frame_received(uint8_t type, const uint8_t *payload, size_t len, 
             fsm_set_error(0x02);
             return;
         }
-        if (fsm_get_state() != STATE_SPEAKING && fsm_get_state() != STATE_PROCESSING) {
+        /* Eski mantik: "ne SPEAKING ne PROCESSING ise SPEAKING'e gec".
+         * Sorun: stop_recording ESP32'yi PROCESSING'e koyuyor, ilk
+         * AUDIO_DOWN geldiginde state PROCESSING -> kosul false -> SPEAKING'e
+         * gecilmiyor, audio_out_start cagrilmiyor, ses calinmiyor.
+         * Dogru mantik: "SPEAKING'te degilsek SPEAKING'e gec" (PROCESSING
+         * dahil tum diger state'lerden buraya gecmek mantikli). */
+        if (fsm_get_state() != STATE_SPEAKING) {
             fsm_set_state(STATE_SPEAKING);
             audio_out_start();
             led_strip_set_pattern(STATE_SPEAKING);
@@ -165,13 +171,13 @@ static void on_frame_received(uint8_t type, const uint8_t *payload, size_t len, 
     }
 }
 
-static void task_usb_tx(void *arg)
+static void task_uart_tx(void *arg)
 {
     (void)arg;
     frame_item_t item;
     while (1) {
         if (xQueueReceive(s_tx_queue, &item, portMAX_DELAY) == pdTRUE) {
-            if (usb_cdc_send(item.buf, item.len) != ESP_OK) {
+            if (uart_link_send(item.buf, item.len) != ESP_OK) {
                 /* Host not connected yet — drop frame safely */
                 vTaskDelay(pdMS_TO_TICKS(50));
             }
@@ -179,12 +185,12 @@ static void task_usb_tx(void *arg)
     }
 }
 
-static void task_usb_rx(void *arg)
+static void task_uart_rx(void *arg)
 {
     (void)arg;
     uint8_t buf[256];
     while (1) {
-        int n = usb_cdc_read(buf, sizeof(buf), 50);
+        int n = uart_link_read(buf, sizeof(buf), 50);
         if (n > 0) {
             protocol_parser_feed(&s_parser, buf, (size_t)n, on_frame_received, NULL);
         }
@@ -252,7 +258,7 @@ static void task_heartbeat(void *arg)
     /* Let USB enumerate before first transmit */
     vTaskDelay(pdMS_TO_TICKS(1500));
     while (1) {
-        if (usb_cdc_connected()) {
+        if (uart_link_connected()) {
             if (!s_status_sent) {
                 send_status(STATE_IDLE, 0);
                 s_status_sent = true;
@@ -302,7 +308,7 @@ void app_main(void)
         ESP_LOGE(TAG, "Crypto self-test failed");
     }
 
-    ESP_ERROR_CHECK(usb_cdc_init());
+    ESP_ERROR_CHECK(uart_link_init());
     ESP_ERROR_CHECK(led_strip_init());
     ESP_ERROR_CHECK(sensor_init());
     ESP_ERROR_CHECK(audio_in_init());
@@ -311,8 +317,8 @@ void app_main(void)
     s_tx_queue = xQueueCreate(PROTO_TX_QUEUE_LEN, sizeof(frame_item_t));
     s_playback_queue = xQueueCreate(PROTO_RX_QUEUE_LEN, sizeof(frame_item_t));
 
-    xTaskCreate(task_usb_tx, "usb_tx", TASK_STACK_USB, NULL, TASK_PRIO_USB_TX, NULL);
-    xTaskCreate(task_usb_rx, "usb_rx", TASK_STACK_USB, NULL, TASK_PRIO_USB_RX, NULL);
+    xTaskCreate(task_uart_tx, "uart_tx", TASK_STACK_UART, NULL, TASK_PRIO_UART_TX, NULL);
+    xTaskCreate(task_uart_rx, "uart_rx", TASK_STACK_UART, NULL, TASK_PRIO_UART_RX, NULL);
     xTaskCreate(task_audio_in, "audio_in", TASK_STACK_AUDIO, NULL, TASK_PRIO_AUDIO_IN, NULL);
     xTaskCreate(task_sensor, "sensor", TASK_STACK_DEFAULT, NULL, TASK_PRIO_SENSOR, NULL);
     xTaskCreate(task_playback, "playback", TASK_STACK_AUDIO, NULL, TASK_PRIO_AUDIO_OUT, NULL);

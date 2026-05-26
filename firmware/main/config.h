@@ -9,10 +9,17 @@
  * MAX98357A(I2S1) DIN=7  BCLK=5  LRC=6  SD=10(mute)  VIN=5V
  * MAX30102 (I2C) SDA=8  SCL=9  INT=4  addr 0x57  VIN=3.3V
  * WS2812B x8     DIN=38 (330R series)  VCC=5V
- * PC             USB-OTG CDC — Start/Stop record from PC app (no extra button)
+ * PC             UART0 (CP210x/CH9102 bridge) @ 921600 baud — Start/Stop
+ *                record from PC app (no extra button). USB-OTG CDC was
+ *                replaced by UART due to a TinyUSB / Windows generic CDC
+ *                ERROR_BAD_COMMAND incompatibility seen on every read.
  */
 
 /* ── Audio ───────────────────────────────────────────────────────── */
+/* Hem mikrofon hem hoparlor 16 kHz. 22050 Hz denendi ama MAX98357A /
+ * ESP32 I2S driver bu non-yuvarlak rate'i temiz turetemedi, ses
+ * tamamen kayboldu. Pipeline hizini ayarlamak icin Piper'i PC
+ * tarafinda yavaslatiyoruz (tts.py: length_scale). */
 #define AUDIO_SAMPLE_RATE_HZ    16000
 #define AUDIO_CHUNK_BYTES       512
 #define AUDIO_CHUNK_SAMPLES     (AUDIO_CHUNK_BYTES / 2)
@@ -40,16 +47,19 @@
 #define LED_DEFAULT_BRIGHTNESS  80
 
 /* ── Protocol ─────────────────────────────────────────────────────── */
-#define PROTO_MAX_PAYLOAD       4096
+#define PROTO_MAX_PAYLOAD       1024
 #define PROTO_TX_QUEUE_LEN      16
 #define PROTO_RX_QUEUE_LEN      8
 
 /* ── Crypto demo key/IV (course assignment — NOT for production) ─── */
 #define CRYPTO_FLAG_ENCRYPTED   0x01
 
+/* ── UART link to PC (CP210x/CH9102 bridge) ───────────────────────── */
+#define UART_BAUD_RATE          921600
+
 /* ── Task priorities (higher = more urgent) ───────────────────────── */
-#define TASK_PRIO_USB_RX        8
-#define TASK_PRIO_USB_TX        7
+#define TASK_PRIO_UART_RX       8
+#define TASK_PRIO_UART_TX       7
 #define TASK_PRIO_AUDIO_IN      7
 #define TASK_PRIO_AUDIO_OUT     7
 #define TASK_PRIO_FSM           5
@@ -57,6 +67,12 @@
 #define TASK_PRIO_LED           3
 #define TASK_PRIO_HEARTBEAT     2
 
-#define TASK_STACK_USB          8192
-#define TASK_STACK_AUDIO        4096
-#define TASK_STACK_DEFAULT      3072
+#define TASK_STACK_UART         8192
+#define TASK_STACK_AUDIO        8192
+/* DEFAULT stack icin >=4 KB sart: task_heartbeat ve task_sensor
+ * queue_frame'i cagiriyor; queue_frame yerel work[1088] + frame[1056]
+ * + frame_item_t (1092) + register window/iç çağrı overhead'i ile
+ * ~3.5 KB tepe stack kullaniyor. 3072 byte ile boot sonrasi ilk
+ * heartbeat'te stack overflow → _DoubleExceptionVector → TWDT reset.
+ * 6144 byte tepenin ~2x'i, guvenli margin birakir. */
+#define TASK_STACK_DEFAULT      6144
