@@ -37,6 +37,15 @@ class Vitals:
     valid: bool = False
 
 
+def vitals_stable(recent_hrs: list[int], tolerance: int = 3, need: int = 4) -> bool:
+    """True once we have >= `need` readings whose last `need` heart rates all
+    fall within `tolerance` BPM of each other (i.e. the reading has settled)."""
+    if len(recent_hrs) < need:
+        return False
+    window = recent_hrs[-need:]
+    return max(window) - min(window) <= tolerance
+
+
 class SerialBridge:
     def __init__(self, port: Optional[str] = None, baud: int = 921600) -> None:
         self.port = port or self._auto_port()
@@ -207,6 +216,46 @@ class SerialBridge:
         self.send_frame(MSG_READ_SENSOR, b"", encrypt=False)
         time.sleep(0.3)
         return self._last_vitals
+
+    def measure_vitals(
+        self,
+        duration_s: float = 15.0,
+        settle_s: float = 2.0,
+        poll_interval: float = 0.4,
+        on_update=None,
+    ) -> Vitals:
+        """Poll the ESP for up to `duration_s`, returning early once readings
+        are valid and stable for `settle_s`. Calls on_update(vitals, elapsed,
+        duration_s) each poll for live GUI feedback. Returns the last reading
+        (which may be invalid if no reliable signal was obtained)."""
+        start = time.monotonic()
+        recent_hrs: list[int] = []
+        last = Vitals()
+        stable_since: float | None = None
+        while time.monotonic() - start < duration_s:
+            loop_t0 = time.monotonic()
+            v = self.read_sensor()  # sends READ_SENSOR, waits ~0.3 s, returns latest
+            last = v
+            elapsed = time.monotonic() - start
+            if on_update:
+                on_update(v, elapsed, duration_s)
+            if v.valid and v.heart_rate > 0:
+                recent_hrs.append(v.heart_rate)
+                if vitals_stable(recent_hrs):
+                    if stable_since is None:
+                        stable_since = time.monotonic()
+                    elif time.monotonic() - stable_since >= settle_s:
+                        return v
+                else:
+                    stable_since = None
+            else:
+                recent_hrs.clear()
+                stable_since = None
+            # read_sensor already slept ~0.3 s; pad out to poll_interval
+            rest = poll_interval - (time.monotonic() - loop_t0)
+            if rest > 0:
+                time.sleep(rest)
+        return last
 
     def last_vitals(self) -> Vitals:
         return self._last_vitals
