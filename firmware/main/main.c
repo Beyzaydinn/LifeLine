@@ -16,6 +16,7 @@
 #include "audio_input.h"
 #include "audio_output.h"
 #include "sensor.h"
+#include "ppg.h"
 #include "led_strip_ctrl.h"
 
 static const char *TAG = "main";
@@ -337,6 +338,9 @@ void app_main(void)
     ESP_ERROR_CHECK(crypto_init());
     if (!crypto_self_test()) {
         ESP_LOGE(TAG, "Crypto self-test failed");
+    }
+    if (!ppg_self_test()) {
+        ESP_LOGE(TAG, "PPG self-test failed");
     }
 
     ESP_ERROR_CHECK(uart_link_init());

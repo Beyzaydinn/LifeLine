@@ -5,6 +5,7 @@ idf_component_register(
         "audio_input.c"
         "audio_output.c"
         "sensor.c"
+        "ppg.c"
         "led_strip_ctrl.c"
         "uart_link.c"
         "protocol.c"
