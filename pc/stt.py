@@ -3,14 +3,26 @@
 from __future__ import annotations
 
 import logging
-import tempfile
+import os
 import wave
 from pathlib import Path
-from typing import Optional
+
+# Tam offline garantisi. faster-whisper modeli ADIYLA ("small.en") yuklenince
+# huggingface_hub varsayilan olarak repo revizyonunu dogrulamak icin
+# huggingface.co'ya HTTP istegi atar. Ders gereksinimi "tamamen offline, network
+# yok" oldugu icin tum HF kutuphanelerini global offline moda zorluyoruz. Bu env
+# var'lar huggingface_hub import edilmeden ONCE set olmali; faster_whisper ancak
+# _get_model() icinde import edildigi icin "import stt" ile burada zamaninda set olur.
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 log = logging.getLogger(__name__)
 
 _model = None
+
+# Whisper modeli Piper ile ayni yerde tutulur: pc/models/. Boylece tum modeller
+# tek yerden, HF cache konumundan bagimsiz, tamamen yerel yuklenir (self-contained).
+_MODEL_DIR = Path(__file__).parent / "models" / "faster-whisper-small.en"
 
 
 def _get_model():
@@ -18,15 +30,17 @@ def _get_model():
     if _model is None:
         from faster_whisper import WhisperModel
 
-        # CPU'da calistir (int8 quantization).
-        # Sebep: Windows'ta CUDA Toolkit (cublas64_12.dll) yuklu degil. Onceki
-        # try/except mantigi yetmedi cunku model load OK donuyor ama transcribe
-        # sirasinda CUDA library yuklenirken patliyor.
-        # CPU + int8: 5 sn ses ~1-2 sn'de transkripte edilir, demo icin yeterli.
-        # Ollama Llama 3.2 zaten kendi CUDA runtime'ini bundle ediyor (GPU'da)
-        # yani Whisper CPU + Llama GPU paralel calisir, VRAM cakismasi olmaz.
-        log.info("Loading faster-whisper small.en (CPU, int8)...")
-        _model = WhisperModel("small.en", device="cpu", compute_type="int8")
+        # Once yerel pakete bak; yoksa model adina dus (yine offline, HF cache).
+        model_ref = str(_MODEL_DIR) if _MODEL_DIR.exists() else "small.en"
+
+        # CPU + int8 zorunlu: Windows'ta CUDA Toolkit (cublas64_12.dll) yuklu
+        # degil, GPU yolu transcribe sirasinda patliyordu. CPU'da 5 sn ses
+        # ~1-2 sn'de biter. Llama (Ollama) kendi CUDA runtime'iyle GPU'da kalir.
+        log.info("Loading faster-whisper small.en from %s (CPU, int8, offline)", model_ref)
+        # local_files_only=True: asla network'e cikma, sadece yerelden yukle.
+        _model = WhisperModel(
+            model_ref, device="cpu", compute_type="int8", local_files_only=True
+        )
     return _model
 
 

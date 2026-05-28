@@ -54,7 +54,10 @@ cd pc
 ```
 
 Bağımlılıklar: `pc/requirements.txt` (pyserial, pycryptodomex, faster-whisper,
-piper-tts). Modeller `pc/models/` (Piper .onnx, gitignore'da).
+piper-tts). Modeller `pc/models/` (gitignore'da): Piper `.onnx` + Whisper
+`faster-whisper-small.en/`. STT tam offline: `stt.py` `HF_HUB_OFFLINE` +
+`local_files_only` ile network'e çıkmaz, modeli yerelden yükler (yoksa HF
+cache'e düşer).
 
 ## Ses formatı (kritik detay)
 

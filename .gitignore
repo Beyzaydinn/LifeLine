@@ -6,6 +6,7 @@ firmware/managed_components/
 pc/.venv/
 pc/__pycache__/
 pc/models/*.onnx
+pc/models/faster-whisper-small.en/
 *.pyc
 .DS_Store
 
