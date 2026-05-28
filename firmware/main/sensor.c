@@ -2,7 +2,6 @@
 #include "config.h"
 #include "ppg.h"
 
-#include <string.h>
 #include "driver/i2c_master.h"
 #include "esp_log.h"
 #include "esp_check.h"
@@ -11,8 +10,6 @@
 
 static const char *TAG = "sensor";
 
-#define REG_INTR_STATUS_1   0x00
-#define REG_INTR_STATUS_2   0x01
 #define REG_FIFO_WR_PTR     0x04
 #define REG_OVF_COUNTER     0x05
 #define REG_FIFO_RD_PTR     0x06
@@ -120,7 +117,7 @@ static void analyze_and_publish(void)
     taskEXIT_CRITICAL(&s_mux);
 
     ESP_LOGI(TAG, "vitals: hr=%u spo2=%u valid=%d (n=%d)",
-             r.heart_rate, r.spo2, r.valid, n);
+             (unsigned)r.heart_rate, (unsigned)r.spo2, r.valid, n);
 }
 
 static void sensor_task(void *arg)
