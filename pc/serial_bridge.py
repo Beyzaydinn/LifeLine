@@ -40,7 +40,7 @@ class Vitals:
 def vitals_stable(recent_hrs: list[int], tolerance: int = 3, need: int = 4) -> bool:
     """True once we have >= `need` readings whose last `need` heart rates all
     fall within `tolerance` BPM of each other (i.e. the reading has settled)."""
-    if len(recent_hrs) < need:
+    if need <= 0 or len(recent_hrs) < need:
         return False
     window = recent_hrs[-need:]
     return max(window) - min(window) <= tolerance
@@ -222,12 +222,12 @@ class SerialBridge:
         duration_s: float = 15.0,
         settle_s: float = 2.0,
         poll_interval: float = 0.4,
-        on_update=None,
+        on_update: Callable[[Vitals, float, float], None] | None = None,
     ) -> Vitals:
         """Poll the ESP for up to `duration_s`, returning early once readings
-        are valid and stable for `settle_s`. Calls on_update(vitals, elapsed,
-        duration_s) each poll for live GUI feedback. Returns the last reading
-        (which may be invalid if no reliable signal was obtained)."""
+        are valid and stable for at least `settle_s`. Calls on_update(vitals,
+        elapsed, duration_s) each poll for live GUI feedback. Returns the last
+        reading (which may be invalid if no reliable signal was obtained)."""
         start = time.monotonic()
         recent_hrs: list[int] = []
         last = Vitals()
