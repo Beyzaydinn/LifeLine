@@ -185,7 +185,7 @@ bool ppg_self_test(void)
 
     ESP_LOGI(TAG,
              "PPG self-test: 72BPM-> hr=%u valid=%d [%s], flat-> valid=%d [%s]",
-             r.heart_rate, r.valid, hr_ok ? "OK" : "FAIL",
+             (unsigned)r.heart_rate, r.valid, hr_ok ? "OK" : "FAIL",
              r2.valid, flat_ok ? "OK" : "FAIL");
     return hr_ok && flat_ok;
 }
