@@ -27,9 +27,12 @@ def generate(user_text: str, vitals: "Vitals") -> str:
     system = load_system_prompt()
     sensor_line = ""
     if vitals.valid:
-        sensor_line = f"\nVitals from sensor: heart rate ~{vitals.heart_rate} BPM, SpO2 ~{vitals.spo2}%."
+        sensor_line = (
+            f"\nMeasured vital signs: heart rate ~{vitals.heart_rate} BPM, "
+            f"SpO2 ~{vitals.spo2}% (uncalibrated estimate)."
+        )
     else:
-        sensor_line = "\nVitals: sensor not valid (finger may not be on MAX30102)."
+        sensor_line = "\nVital signs: not measured (the finger sensor was not used)."
 
     prompt = f"{system}{sensor_line}\n\nUser describes the emergency:\n{user_text}\n\nAssistant response:"
 

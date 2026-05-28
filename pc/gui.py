@@ -19,7 +19,7 @@ from tkinter import ttk, scrolledtext, messagebox
 
 from serial.tools import list_ports
 
-from serial_bridge import SerialBridge
+from serial_bridge import SerialBridge, Vitals
 import stt
 import llm
 import tts
@@ -45,6 +45,10 @@ class FirstAidApp(tk.Tk):
 
         self.bridge: SerialBridge | None = None
         self._busy = False
+        # Last valid "Read vitals" measurement, passed to the LLM. The finger is
+        # usually off the sensor while speaking, so the real-time stream during
+        # recording is invalid — we reuse this measured value instead.
+        self._measured_vitals = Vitals()
 
         top = ttk.Frame(self, padding=8)
         top.pack(fill=tk.X)
@@ -171,6 +175,7 @@ class FirstAidApp(tk.Tk):
             try:
                 v = self.bridge.measure_vitals(on_update=on_update)
                 if v.valid and v.heart_rate > 0:
+                    self._measured_vitals = v  # remember for the LLM's assessment
                     final = f"HR: {v.heart_rate} BPM   SpO2: ~{v.spo2}% (estimate)"
                 else:
                     final = "Could not get a reliable reading. Place fingertip gently and keep still."
@@ -208,7 +213,9 @@ class FirstAidApp(tk.Tk):
         def work() -> None:
             try:
                 pcm = self.bridge.stop_recording()
-                vitals = self.bridge.last_vitals()
+                # Prefer the last "Read vitals" measurement: the finger is usually off
+                # the sensor while speaking, so the recording-time stream is invalid.
+                vitals = self._measured_vitals if self._measured_vitals.valid else self.bridge.last_vitals()
                 self.after(0, lambda: self._log("Transcribing (Whisper)..."))
                 text = stt.transcribe(pcm) or "I need first aid help"
                 self.after(0, lambda: self._log(f"You said: {text}"))
