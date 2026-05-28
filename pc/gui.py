@@ -67,7 +67,10 @@ class FirstAidApp(tk.Tk):
         vitals_fr.pack(fill=tk.X, padx=8, pady=4)
         self.vitals_var = tk.StringVar(value="HR: —   SpO2: —")
         ttk.Label(vitals_fr, textvariable=self.vitals_var).pack(side=tk.LEFT)
-        ttk.Button(vitals_fr, text="Read vitals", command=self._read_vitals).pack(side=tk.RIGHT)
+        self.btn_vitals = ttk.Button(vitals_fr, text="Read vitals", command=self._measure_vitals)
+        self.btn_vitals.pack(side=tk.RIGHT)
+        self.vitals_progress = ttk.Progressbar(vitals_fr, mode="determinate", length=160)
+        self.vitals_progress.pack(side=tk.RIGHT, padx=8)
 
         ctrl = ttk.LabelFrame(self, text="Voice (INMP441) — describe emergency in English", padding=8)
         ctrl.pack(fill=tk.X, padx=8, pady=4)
@@ -143,20 +146,40 @@ class FirstAidApp(tk.Tk):
             self.status_var.set("ESP32: connected")
             self.btn_start.config(state=tk.NORMAL)
             self._log(f"Connected to {port}")
-            self._read_vitals()
+            self.vitals_var.set("Press 'Read vitals' and place fingertip on MAX30102")
         except Exception as e:
             messagebox.showerror("Connect failed", str(e))
 
-    def _read_vitals(self) -> None:
-        if not self.bridge:
+    def _measure_vitals(self) -> None:
+        if not self.bridge or self._busy:
             return
+        self._busy = True  # block recording start during the ~15 s measurement
+        self.btn_vitals.config(state=tk.DISABLED)
+        self.vitals_progress["value"] = 0
+        self._log("Measuring vitals — keep fingertip still on the MAX30102...")
+
+        def on_update(v, elapsed: float, duration: float) -> None:
+            pct = max(0.0, min(100.0, 100.0 * elapsed / duration))
+            if v.valid and v.heart_rate > 0:
+                txt = f"Measuring... HR: {v.heart_rate} BPM   SpO2: ~{v.spo2}% (estimate)"
+            else:
+                txt = "Measuring... keep fingertip still"
+            self.after(0, lambda: self.vitals_var.set(txt))
+            self.after(0, lambda: self.vitals_progress.config(value=pct))
 
         def work() -> None:
-            v = self.bridge.read_sensor()
-            txt = f"HR: {v.heart_rate} BPM   SpO2: {v.spo2}%"
-            if not v.valid:
-                txt += "  (place finger on MAX30102)"
-            self.after(0, lambda: self.vitals_var.set(txt))
+            try:
+                v = self.bridge.measure_vitals(on_update=on_update)
+                if v.valid and v.heart_rate > 0:
+                    final = f"HR: {v.heart_rate} BPM   SpO2: ~{v.spo2}% (estimate)"
+                else:
+                    final = "Could not get a reliable reading. Place fingertip gently and keep still."
+                self.after(0, lambda: self.vitals_var.set(final))
+                self.after(0, lambda: self._log(final))
+            finally:
+                self._busy = False
+                self.after(0, lambda: self.vitals_progress.config(value=0))
+                self.after(0, lambda: self.btn_vitals.config(state=tk.NORMAL))
 
         threading.Thread(target=work, daemon=True).start()
 
