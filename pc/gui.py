@@ -159,7 +159,7 @@ class FirstAidApp(tk.Tk):
         self._log("Measuring vitals — keep fingertip still on the MAX30102...")
 
         def on_update(v, elapsed: float, duration: float) -> None:
-            pct = max(0.0, min(100.0, 100.0 * elapsed / duration))
+            pct = max(0.0, min(100.0, 100.0 * elapsed / duration)) if duration > 0 else 0.0
             if v.valid and v.heart_rate > 0:
                 txt = f"Measuring... HR: {v.heart_rate} BPM   SpO2: ~{v.spo2}% (estimate)"
             else:
@@ -176,6 +176,14 @@ class FirstAidApp(tk.Tk):
                     final = "Could not get a reliable reading. Place fingertip gently and keep still."
                 self.after(0, lambda: self.vitals_var.set(final))
                 self.after(0, lambda: self._log(final))
+            except Exception as e:
+                # Convert to string now: `e` is unbound once the except block
+                # exits (Python 3), so a deferred lambda must capture the text.
+                err_msg = f"{type(e).__name__}: {e}"
+                import traceback
+                traceback.print_exc()
+                self.after(0, lambda msg=err_msg: messagebox.showerror("Vitals error", msg))
+                self.after(0, lambda msg=err_msg: self._log(f"ERROR: {msg}"))
             finally:
                 self._busy = False
                 self.after(0, lambda: self.vitals_progress.config(value=0))
