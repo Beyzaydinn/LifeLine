@@ -28,6 +28,11 @@ static const char *TAG = "sensor";
 #define SAMPLE_RATE_HZ      50.0f
 #define SAMPLE_TICK_MS      80          /* FIFO drain cadence */
 #define ANALYZE_EVERY_TICKS 6           /* ~480 ms between analyses */
+#define FINGER_PRESENT_FLOOR 50000      /* raw IR below this => no/partial finger; the
+                                         * ring buffer is reset so the window holds only
+                                         * solid-contact samples (a partial-contact
+                                         * outlier otherwise corrupts the peak threshold
+                                         * for a full window length) */
 
 static i2c_master_bus_handle_t s_bus;
 static i2c_master_dev_handle_t s_dev;
@@ -88,6 +93,13 @@ static void drain_fifo(void)
     for (int i = 0; i < navail; i++) {
         uint32_t red = 0, ir = 0;
         if (read_fifo_sample(&red, &ir) != ESP_OK) break;
+        if ((int32_t)ir < FINGER_PRESENT_FLOOR) {
+            /* No finger (or mid removal): discard the buffer so the window only
+             * ever holds contiguous finger data — keeps the onset step out of it. */
+            s_widx = 0;
+            s_count = 0;
+            continue;
+        }
         s_ir[s_widx] = (int32_t)ir;
         s_red[s_widx] = (int32_t)red;
         s_widx = (s_widx + 1) % PPG_MAX_SAMPLES;
@@ -99,16 +111,21 @@ static void drain_fifo(void)
  * publish the result. */
 static void analyze_and_publish(void)
 {
-    int n = s_count;
-    if (n < 1) return;
-    int start = (s_widx - n + PPG_MAX_SAMPLES) % PPG_MAX_SAMPLES;
-    for (int i = 0; i < n; i++) {
-        int idx = (start + i) % PPG_MAX_SAMPLES;
-        s_lin_ir[i] = s_ir[idx];
-        s_lin_red[i] = s_red[idx];
-    }
     ppg_result_t r;
-    ppg_compute(s_lin_ir, s_lin_red, n, SAMPLE_RATE_HZ, &r);
+    r.heart_rate = 0;
+    r.spo2 = 0;
+    r.valid = false;
+
+    int n = s_count;
+    if (n >= 1) {
+        int start = (s_widx - n + PPG_MAX_SAMPLES) % PPG_MAX_SAMPLES;
+        for (int i = 0; i < n; i++) {
+            int idx = (start + i) % PPG_MAX_SAMPLES;
+            s_lin_ir[i] = s_ir[idx];
+            s_lin_red[i] = s_red[idx];
+        }
+        ppg_compute(s_lin_ir, s_lin_red, n, SAMPLE_RATE_HZ, &r);
+    }
 
     taskENTER_CRITICAL(&s_mux);
     s_vitals.heart_rate = r.heart_rate;
@@ -158,8 +175,10 @@ esp_err_t sensor_init(void)
      * (oldest overwritten if we ever fall behind, never freezes), almost-full
      * threshold unused (we poll). */
     ESP_RETURN_ON_ERROR(max30102_write(REG_FIFO_CONFIG, 0x30), TAG, "fifo cfg");
-    /* SPO2_CONFIG 0x27: 4096 nA range, 100 Hz, 411 us / 18-bit. */
-    ESP_RETURN_ON_ERROR(max30102_write(REG_SPO2_CONFIG, 0x27), TAG, "spo2 cfg");
+    /* SPO2_CONFIG 0x67: 16384 nA ADC range (4x headroom — at 4096 nA a firm
+     * finger saturated the 18-bit ADC at 262143 and clipped the PPG waveform),
+     * 100 Hz, 411 us / 18-bit. */
+    ESP_RETURN_ON_ERROR(max30102_write(REG_SPO2_CONFIG, 0x67), TAG, "spo2 cfg");
     /* LED current ~16 mA: strong enough for loose finger contact. */
     ESP_RETURN_ON_ERROR(max30102_write(REG_LED1_PA, 0x50), TAG, "led1");
     ESP_RETURN_ON_ERROR(max30102_write(REG_LED2_PA, 0x50), TAG, "led2");
