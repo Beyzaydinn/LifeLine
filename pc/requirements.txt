@@ -1,5 +1,6 @@
 pyserial>=3.5
 pycryptodomex>=3.20
 faster-whisper>=1.0.0
+nvidia-cublas-cu12  # GPU Whisper acceleration (Windows/CUDA 12); if absent, stt.py auto-falls back to CPU int8
 requests>=2.31.0
 piper-tts>=1.2.0

@@ -92,6 +92,21 @@ class FirstAidApp(tk.Tk):
             foreground="gray",
         ).pack(pady=4)
 
+        # Pre-load the speech model (Whisper) in the background so the first real
+        # transcribe does not wait ~2 s for loading. GPU if available, else CPU.
+        self._prewarm_stt()
+
+    def _prewarm_stt(self) -> None:
+        self._log("Loading speech model in background...")
+
+        def work() -> None:
+            t0 = time.time()
+            stt.prewarm()
+            dt = time.time() - t0
+            self.after(0, lambda: self._log(f"Speech model ready ({dt:.1f}s)."))
+
+        threading.Thread(target=work, daemon=True).start()
+
     def _refresh_ports(self) -> None:
         ports = [p.device for p in list_ports.comports()]
         self.port_combo["values"] = ports
@@ -111,7 +126,7 @@ class FirstAidApp(tk.Tk):
         if not port:
             messagebox.showerror("Error", "Select a COM port")
             return
-        # Eski baglanti varsa kapat (cift Connect basildiginda port catismasini onler)
+        # Close any existing connection first (prevents a port clash on double Connect).
         if self.bridge is not None:
             try:
                 self.bridge.close()
@@ -175,12 +190,12 @@ class FirstAidApp(tk.Tk):
                 self.bridge.send_playback_end()
                 self.after(0, lambda: self._log("Done.\n"))
             except Exception as e:
-                # Python 3'te `except as e` blogu cikinca 'e' otomatik silinir,
-                # lambda gecikmeli calistiginda NameError veriyor. Hatayi
-                # hemen string'e cevirip closure'a aliyoruz.
+                # In Python 3, `e` is auto-deleted when the `except as e` block exits,
+                # so a deferred lambda would raise NameError. Convert the error to a
+                # string immediately and capture that in the closure.
                 err_msg = f"{type(e).__name__}: {e}"
                 import traceback
-                traceback.print_exc()  # PowerShell'e tam stack yazsin
+                traceback.print_exc()  # write the full stack to the console
                 self.after(0, lambda msg=err_msg: messagebox.showerror("Error", msg))
                 self.after(0, lambda msg=err_msg: self._log(f"ERROR: {msg}"))
             finally:
