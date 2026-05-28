@@ -82,6 +82,7 @@ void ppg_compute(const int32_t *ir, const int32_t *red, int n, float fs,
     out->heart_rate = 0;
     out->spo2 = 0;
     out->valid = false;
+    if (n <= 0 || fs <= 0.0f) return;          /* self-defending public contract */
     if (n > PPG_MAX_SAMPLES) n = PPG_MAX_SAMPLES;
     if (n < (int)(2.0f * fs)) return;          /* need >= ~2 s of data */
 
@@ -145,6 +146,7 @@ void ppg_compute(const int32_t *ir, const int32_t *red, int n, float fs,
     /* 5) SpO2 estimate (ratio-of-ratios) */
     int spo2 = 0;
     float red_dc = mean_i32(red, n);
+    /* raw (unsmoothed) AC for both channels keeps the R-ratio unbiased */
     float ac_ir = amplitude(s_ac_ir, n);
     float ac_red = amplitude(s_ac_red, n);
     if (ir_dc > 0.0f && red_dc > 0.0f && ac_ir > 0.0f) {
