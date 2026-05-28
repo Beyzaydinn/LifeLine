@@ -53,15 +53,7 @@ def generate(user_text: str, vitals: "Vitals") -> str:
         log.error("Ollama error: %s", e)
         reply = (
             "Stay calm. Ensure the area is safe and call emergency services immediately. "
-            "Check if the person is breathing and responsive. "
-            "This is general first-aid information, not a medical diagnosis. "
-            "Call emergency services immediately."
-        )
-
-    if "not a medical diagnosis" not in reply.lower():
-        reply += (
-            " This is general first-aid information, not a medical diagnosis. "
-            "Call emergency services immediately."
+            "Check if the person is breathing and responsive."
         )
 
     log.info("LLM reply: %s", reply[:200])
