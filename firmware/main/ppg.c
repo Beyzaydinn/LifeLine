@@ -7,12 +7,27 @@ static const char *TAG = "ppg";
 
 /* ---- tunables ---------------------------------------------------------- */
 #define FINGER_IR_THRESHOLD   50000.0f   /* raw IR DC below this => no finger */
-#define HP_ALPHA              0.995f     /* one-pole DC blocker pole */
-#define PEAK_THRESH_FRAC      0.40f      /* fraction of AC peak used as gate */
+#define HP_ALPHA              0.97f      /* one-pole high-pass ~0.24 Hz: removes the
+                                          * slow baseline rise as finger contact firms;
+                                          * the cardiac band passes essentially intact */
+#define PEAK_THRESH_FRAC      0.30f      /* fraction of AC peak used as gate. Low because
+                                          * the refractory (not amplitude) rejects the
+                                          * dicrotic; this catches respiration-modulated
+                                          * systolic peaks so beat detection is consistent */
+#define REFRACTORY_S          0.50f      /* min beat spacing. Rejects the dicrotic
+                                          * notch (~0.38 s after systolic) that doubled
+                                          * the rate. Caps HR at ~120 BPM. */
+#define STARTUP_SKIP_S        1.0f       /* ignore the oldest ~1 s of the window: the
+                                          * HP startup transient from the finger-onset
+                                          * sample would otherwise dominate the peak
+                                          * threshold for a full window length */
 #define MIN_IBI_MS            300.0f     /* 200 BPM ceiling */
 #define MAX_IBI_MS            2000.0f    /* 30 BPM floor */
 #define MIN_BEATS             4          /* accepted IBIs needed for a reading */
-#define MAX_CV                0.25f      /* max IBI coefficient of variation */
+#define MAX_CV                0.40f      /* max IBI coefficient of variation. Loose: the
+                                          * median IBI is robust to an occasional missed
+                                          * or extra beat, so we accept the window rather
+                                          * than flicker to invalid on natural variation */
 #define MAX_PEAKS             64
 
 /* Static scratch (single-threaded use; see header note). */
@@ -27,8 +42,8 @@ static float mean_i32(const int32_t *x, int n)
     return (float)(s / (double)n);
 }
 
-/* One-pole DC blocker: y[i] = x[i] - x[i-1] + a*y[i-1]. Removes baseline,
- * keeps the pulsatile AC component. */
+/* One-pole DC blocker / high-pass: y[i] = x[i] - x[i-1] + a*y[i-1]. Removes the
+ * baseline, keeps the pulsatile AC component. */
 static void hp_filter(const int32_t *x, int n, float *out)
 {
     float prev_x = (float)x[0];
@@ -56,6 +71,7 @@ static void smooth5(const float *src, int n, float *dst)
     }
 }
 
+/* Peak-to-peak amplitude of a[0..n). */
 static float amplitude(const float *a, int n)
 {
     float mn = a[0], mx = a[0];
@@ -95,17 +111,26 @@ void ppg_compute(const int32_t *ir, const int32_t *red, int n, float fs,
     hp_filter(red, n, s_ac_red);
     smooth5(s_ac_ir, n, s_smooth);
 
-    /* 3) adaptive-threshold peak detection on the smoothed IR AC */
-    float mx = s_smooth[0];
-    for (int i = 1; i < n; i++) if (s_smooth[i] > mx) mx = s_smooth[i];
+    /* Analyse [skip..n): drop the HP startup region (the finger-onset sample at
+     * the oldest end produces a transient that would corrupt the threshold). */
+    int skip = (int)(STARTUP_SKIP_S * fs);
+    if (skip >= n - 2) skip = 0;
+    int m = n - skip;
+    const int32_t *ir_a = ir + skip;
+    const int32_t *red_a = red + skip;
+
+    /* 3) peak detection on the smoothed IR AC over [skip..n). The refractory
+     * period rejects the dicrotic notch that would otherwise double the rate. */
+    float mx = s_smooth[skip];
+    for (int i = skip + 1; i < n; i++) if (s_smooth[i] > mx) mx = s_smooth[i];
     float thr = PEAK_THRESH_FRAC * mx;
-    int refractory = (int)(0.3f * fs);
+    int refractory = (int)(REFRACTORY_S * fs);
     if (refractory < 1) refractory = 1;
 
     int peak_idx[MAX_PEAKS];
     int npeaks = 0;
-    int last_peak = -refractory - 1;
-    for (int i = 1; i < n - 1; i++) {
+    int last_peak = skip - refractory - 1;
+    for (int i = skip + 1; i < n - 1; i++) {
         if (s_smooth[i] > thr &&
             s_smooth[i] >= s_smooth[i - 1] &&
             s_smooth[i] > s_smooth[i + 1] &&
@@ -143,14 +168,15 @@ void ppg_compute(const int32_t *ir, const int32_t *red, int n, float fs,
     if (bpm < 30) bpm = 30;
     if (bpm > 200) bpm = 200;
 
-    /* 5) SpO2 estimate (ratio-of-ratios) */
+    /* 5) SpO2 estimate (ratio-of-ratios) over the same analysed region */
     int spo2 = 0;
-    float red_dc = mean_i32(red, n);
+    float ir_dc_a = mean_i32(ir_a, m);
+    float red_dc_a = mean_i32(red_a, m);
     /* raw (unsmoothed) AC for both channels keeps the R-ratio unbiased */
-    float ac_ir = amplitude(s_ac_ir, n);
-    float ac_red = amplitude(s_ac_red, n);
-    if (ir_dc > 0.0f && red_dc > 0.0f && ac_ir > 0.0f) {
-        float ratio = (ac_red / red_dc) / (ac_ir / ir_dc);
+    float ac_ir = amplitude(s_ac_ir + skip, m);
+    float ac_red = amplitude(s_ac_red + skip, m);
+    if (ir_dc_a > 0.0f && red_dc_a > 0.0f && ac_ir > 0.0f) {
+        float ratio = (ac_red / red_dc_a) / (ac_ir / ir_dc_a);
         float spo2f = 104.0f - 17.0f * ratio;
         if (spo2f > 100.0f) spo2f = 100.0f;
         if (spo2f < 70.0f) spo2f = 70.0f;
