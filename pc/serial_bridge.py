@@ -219,7 +219,7 @@ class SerialBridge:
 
     def measure_vitals(
         self,
-        duration_s: float = 15.0,
+        duration_s: float = 20.0,
         settle_s: float = 2.0,
         poll_interval: float = 0.4,
         on_update: Callable[[Vitals, float, float], None] | None = None,
@@ -241,7 +241,7 @@ class SerialBridge:
                 on_update(v, elapsed, duration_s)
             if v.valid and v.heart_rate > 0:
                 recent_hrs.append(v.heart_rate)
-                if vitals_stable(recent_hrs):
+                if vitals_stable(recent_hrs, tolerance=5):
                     if stable_since is None:
                         stable_since = time.monotonic()
                     elif time.monotonic() - stable_since >= settle_s:
