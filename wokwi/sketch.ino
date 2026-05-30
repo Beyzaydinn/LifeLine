@@ -1,39 +1,64 @@
-// First Aid Assistant - Wokwi
-// Gercek pinler: WS2812B=38 INMP441=2,41,42 MAX98357=5,6,7,10 MAX30102=8,9,4
-// Wokwi: neo=17 (halka), pot=mic GPIO2, buzzer=spk, mpu6050=MAX30102 gorunumu I2C 8,9
+/*
+ * LifeLine — Wokwi (paste with diagram.json from repo wokwi/ folder)
+ *
+ * After paste: Save → Simulate. Do NOT drag wires on the diagram.
+ *
+ * Breadboard / ESP-IDF (firmware/main/config.h):
+ *   WS2812B x8      DIN = 38    5V
+ *   INMP441         SD=2  SCK=41  WS=42  L/R=GND
+ *   MAX98357A       DIN=7  BCLK=5  LRC=6  SD=10
+ *   MAX30102        SDA=8  SCL=9  INT=4
+ */
 
-#define NEO_PIN 17
-#define BUZZ_PIN 18
+#include <Adafruit_NeoPixel.h>
+
+#define PIN_NEO  38
+#define PIN_BEEP 7
+#define NUMPIX   8
+
+Adafruit_NeoPixel ring(NUMPIX, PIN_NEO, NEO_GRB + NEO_KHZ800);
 
 void setup() {
   Serial.begin(115200);
-  delay(200);
-  Serial.println("First Aid Assistant");
-  Serial.println("WS2812B x8  -> GPIO 38");
-  Serial.println("INMP441    -> 2, 41, 42");
-  Serial.println("MAX98357A  -> 5, 6, 7, 10");
-  Serial.println("MAX30102   -> 8, 9, 4");
-  Serial.println("PC         -> gui.py");
+  delay(500);
+  Serial.println();
+  Serial.println("LifeLine Wokwi — check wiring in diagram.json");
+  Serial.println("NeoPixel=38  Pot SIG=2  Buzzer=7  I2C 8/9 INT=4");
+  Serial.println("If the ring stays dark, diagram.json was not pasted fully.");
+
+  pinMode(PIN_BEEP, OUTPUT);
+  ring.begin();
+  ring.setBrightness(80);
+  ring.show();
+}
+
+static void color(uint8_t r, uint8_t g, uint8_t b) {
+  for (int i = 0; i < NUMPIX; i++) {
+    ring.setPixelColor(i, ring.Color(r, g, b));
+  }
+  ring.show();
 }
 
 void loop() {
   Serial.println("IDLE");
-  rgbLedWrite(NEO_PIN, 0, 80, 0);
-  delay(1200);
+  color(0, 80, 0);
+  noTone(PIN_BEEP);
+  delay(1500);
 
   Serial.println("RECORDING");
-  rgbLedWrite(NEO_PIN, 200, 0, 0);
-  tone(BUZZ_PIN, 880, 80);
-  delay(1200);
+  color(220, 0, 0);
+  tone(PIN_BEEP, 880, 80);
+  delay(1500);
 
   Serial.println("PROCESSING");
-  rgbLedWrite(NEO_PIN, 80, 0, 120);
-  delay(1200);
+  color(90, 0, 140);
+  noTone(PIN_BEEP);
+  delay(1500);
 
   Serial.println("SPEAKING");
-  rgbLedWrite(NEO_PIN, 0, 120, 40);
-  tone(BUZZ_PIN, 523, 200);
-  delay(300);
-  noTone(BUZZ_PIN);
-  delay(900);
+  color(0, 130, 50);
+  tone(PIN_BEEP, 523, 200);
+  delay(200);
+  noTone(PIN_BEEP);
+  delay(1300);
 }

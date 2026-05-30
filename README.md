@@ -59,8 +59,8 @@ wokwi/        diagram + link
 
 ## Wokwi
 
-Sadece `wokwi/diagram.json` → Wokwi projesine yapıştır (tam pin şeması + LED halka).  
-Simülasyon kodu için Wokwi’de ayrı `sketch.ino` ekleyebilirsin; gerçek sistem `firmware/` + `pc/gui.py`.
+Upload `wokwi/diagram.json` and `wokwi/sketch.ino` to [Wokwi](https://wokwi.com), save, and put the project URL in `wokwi/project_link.txt`.  
+NeoPixel uses GPIO 38 (matches `config.h`). Potentiometer / buzzer / MPU6050 are stand-ins for INMP441 / speaker+MAX98357 / MAX30102. Real system: `firmware/` + `pc/gui.py`.
 
 ## LMS
 

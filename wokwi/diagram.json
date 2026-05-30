@@ -1,56 +1,61 @@
 {
   "version": 1,
-  "author": "CEN322",
+  "author": "LifeLine CEN322",
   "editor": "wokwi",
+  "libraries": "Adafruit NeoPixel",
   "parts": [
     {
       "type": "board-esp32-s3-devkitc-1",
       "id": "esp",
       "top": 0,
-      "left": 0,
+      "left": 150,
       "attrs": {}
-    },
-    {
-      "type": "wokwi-neopixel",
-      "id": "neo",
-      "top": 0,
-      "left": 260,
-      "attrs": { "color": "green" }
     },
     {
       "type": "wokwi-slide-potentiometer",
       "id": "mic",
-      "top": 80,
-      "left": 260,
+      "top": 96,
+      "left": 480,
       "attrs": {}
+    },
+    {
+      "type": "wokwi-led-ring",
+      "id": "ring",
+      "top": 290,
+      "left": 480,
+      "attrs": { "pixels": "8" }
     },
     {
       "type": "wokwi-buzzer",
       "id": "spk",
-      "top": 160,
-      "left": 260,
-      "attrs": { "volume": "0.4" }
+      "top": 192,
+      "left": -80,
+      "attrs": { "volume": "0.35" }
     },
     {
       "type": "wokwi-mpu6050",
-      "id": "spo2",
-      "top": 260,
-      "left": 260,
+      "id": "oxi",
+      "top": 336,
+      "left": -80,
       "attrs": {}
     }
   ],
   "connections": [
-    [ "neo:DIN", "esp:17", "green", [] ],
-    [ "neo:VCC", "esp:5V", "red", [] ],
-    [ "neo:GND", "esp:GND.1", "black", [] ],
-    [ "mic:VCC", "esp:3V3.1", "red", [] ],
-    [ "mic:SIG", "esp:2", "blue", [] ],
-    [ "mic:GND", "esp:GND.2", "black", [] ],
-    [ "spk:1", "esp:GND.3", "black", [] ],
-    [ "spk:2", "esp:18", "green", [] ],
-    [ "spo2:VCC", "esp:3V3.2", "red", [] ],
-    [ "spo2:GND", "esp:GND.2", "black", [] ],
-    [ "spo2:SDA", "esp:8", "green", [] ],
-    [ "spo2:SCL", "esp:9", "yellow", [] ]
+    ["mic:VCC",  "esp:3V3",   "red",    []],
+    ["mic:GND",  "esp:GND.2", "black",  []],
+    ["mic:SIG",  "esp:2",     "blue",   []],
+
+    ["ring:VCC", "esp:5V",    "red",    []],
+    ["ring:GND", "esp:GND.1", "black",  []],
+    ["ring:DIN", "esp:38",    "green",  []],
+
+    ["spk:2",    "esp:7",     "green",  []],
+    ["spk:1",    "esp:GND.3", "black",  []],
+
+    ["oxi:VCC",  "esp:3V3",   "red",    []],
+    ["oxi:GND",  "esp:GND.2", "black",  []],
+    ["oxi:SDA",  "esp:8",     "green",  []],
+    ["oxi:SCL",  "esp:9",     "yellow", []],
+    ["oxi:INT",  "esp:4",     "purple", []]
   ]
 }

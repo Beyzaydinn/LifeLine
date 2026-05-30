@@ -1,1 +1,4 @@
-https://wokwi.com/projects/464462040095424513
+Paste your saved Wokwi project URL here after upload:
+https://wokwi.com/projects/YOUR_PROJECT_ID
+
+Upload only: diagram.json + sketch.ino (and this file for LMS).
