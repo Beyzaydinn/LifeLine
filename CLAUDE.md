@@ -30,7 +30,8 @@ The ESP has two separate USB connections, for separate jobs:
 
 - **DATA plane**: UART0 (GPIO 43 TX / 44 RX, 921600 baud) → on-board
   CP210x/CH9102 USB-UART bridge → a COM port on the PC (e.g. COM12). ONLY the
-  framed binary protocol (AES'd audio/sensor/control). NO console/log.
+  framed binary protocol (audio + sensor payloads AES'd; control/status frames
+  are cleartext). NO console/log.
 - **LOG plane**: USB-Serial-JTAG (native USB connector) → a separate COM port
   (e.g. COM13). ESP_LOGx output and panic traces. `idf.py -p COMxx monitor`.
 
@@ -104,7 +105,16 @@ network; it loads the model locally (otherwise falls back to the HF cache).
 
 AES-256-CBC + PKCS#7, HW-accelerated via mbedtls on the ESP (`crypto_aes.c`),
 pycryptodomex on the PC (`crypto_aes.py`). **This encryption stays — required by
-the course.** Demo key/IV, not production.
+the course.** Demo key/IV (key `0x00..0x1f` hardcoded both sides), not production.
+
+- **Coverage is partial by design**: only `AUDIO_UP` (0x01), `AUDIO_DOWN` (0x10)
+  and `SENSOR` (0x02) payloads are encrypted (`protocol_type_encrypted()` /
+  PC `ENCRYPTED_TYPES`). All control/status frames (HEARTBEAT, STATUS,
+  CRYPTO_CAP, START/STOP_RECORD, READ_SENSOR, PLAYBACK_END, RESET) are cleartext.
+- IV is random per message (`esp_fill_random` / `os.urandom`), prepended on the
+  wire as `[flags(1)=0x01][IV(16)][ciphertext]`. The fixed `AES_IV_DEFAULT` is
+  used ONLY by the crypto self-test, never on the live link. No MAC/auth tag —
+  confidentiality only; frame integrity comes from the (non-crypto) CRC16.
 
 ## Rules / constraints
 
@@ -124,12 +134,21 @@ firmware/sdkconfig.defaults   two-plane I/O config + AES HW + FreeRTOS
 pc/               PC side (gui, stt, llm, tts, serial_bridge, crypto_aes, protocol)
 pc/_test_*.py     diagnostic/test scripts
 docs/             reports (.md), instructions/, superpowers/specs/ (design docs)
-wokwi/            simulation (diagram.json, sketch.ino) — pins may be INCONSISTENT with firmware
+wokwi/            simulation (diagram.json + sketch.ino NeoPixel-FSM demo) — DevKitC-1 stand-in board + stand-in parts (pot=mic, buzzer=speaker, MPU6050=MAX30102); sim pins now MATCH config.h (NeoPixel 38, mic/pot 2, speaker/buzzer 7, I2C 8/9/4). project_link.txt is still a placeholder URL.
 ```
 
 ## Notes
 
 - `firmware/main/usb_cdc.c/h`: leftover from the old USB-OTG CDC approach; UART is
   used now (abandoned due to Windows TinyUSB CDC incompatibility).
-- MAX30102 BPM/SpO2 currently produces fake values (modulo arithmetic); no real
-  PPG analysis yet.
+- MAX30102 vitals are REAL PPG, not placeholders (the old "fake/modulo" note was
+  stale). `sensor.c` drains the FIFO (RED then IR, 18-bit) with two-stage
+  finger-gating (raw IR ≥ 50000); `ppg.c` does one-pole high-pass DC removal
+  (α=0.97), 5-tap smoothing, refractory-gated peak detection (0.5 s → rejects the
+  dicrotic notch), IBI filtering + coefficient-of-variation gate, median IBI →
+  BPM (clamped 30–200), and a ratio-of-ratios SpO2 estimate
+  (`R = (AC_red/DC_red)/(AC_ir/DC_ir)`, `SpO2 = 104 − 17·R`, clamped 70–100), plus
+  a boot `ppg_self_test()`. SpO2 is NOT factory-calibrated, so it is surfaced to
+  the LLM as an "uncalibrated estimate"; only clinical calibration remains future
+  work. Effective sample rate 50 Hz, ~12 s analysis window, recomputed ~every
+  480 ms.

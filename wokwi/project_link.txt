@@ -1,4 +1,6 @@
-Paste your saved Wokwi project URL here after upload:
-https://wokwi.com/projects/YOUR_PROJECT_ID
+LifeLine — Wokwi project (CEN322 simulation)
+https://wokwi.com/projects/464462040095424513
 
-Upload only: diagram.json + sketch.ino (and this file for LMS).
+Contains: diagram.json + sketch.ino (NeoPixel FSM status demo; stand-in parts —
+slide-potentiometer = INMP441 mic, buzzer = MAX98357A + speaker, MPU6050 = MAX30102).
+The real working system is the ESP-IDF firmware in firmware/ + the PC app in pc/.

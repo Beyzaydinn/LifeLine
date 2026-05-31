@@ -9,7 +9,7 @@
 | MAX98357A + 4Ω speaker | Voice output (I2S) |
 | MAX30102 | Heart rate / SpO2 (I2C) |
 | WS2812B ×8 ring | Status LEDs |
-| PC | USB-OTG — AI + **graphical interface** |
+| PC | USB-UART (CP210x/CH9102 bridge) — AI + **graphical interface** |
 
 ## Wiring
 
@@ -20,8 +20,8 @@
 | MAX30102 SDA / SCL / INT | 8 / 9 / 4 | 3.3 V |
 | NeoPixel DIN | 38 (+330 Ω) | 5 V VBUS |
 
-- **UART USB:** `idf.py flash monitor`
-- **OTG USB:** PC app `python gui.py`
+- **DATA port** (CP210x/CH9102 USB-UART bridge, 921600 baud): `idf.py -p COMx flash` + the PC app `python gui.py` — carries the framed binary protocol
+- **LOG port** (USB-Serial-JTAG): `idf.py -p COMy monitor` — ESP logs only
 
 ## 1. Flash firmware
 
@@ -42,7 +42,7 @@ pip install -r requirements.txt
 python gui.py
 ```
 
-1. **Connect** (OTG COM port)
+1. **Connect** (CP210x/CH9102 DATA COM port)
 2. **Read vitals** — finger on MAX30102
 3. **Start recording** → speak in English
 4. **Stop and analyze** → hear reply on speaker
